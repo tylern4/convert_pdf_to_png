@@ -1,8 +1,17 @@
+#!/Users/tylern/micromamba/envs/gui/bin/python3
 import sys
 from PyQt6.QtWidgets import QApplication, QMainWindow, QFileDialog, QWidget, QGridLayout, QLineEdit, QPushButton, QLabel
 from pathlib import Path
 
+import threading
+
 import subprocess
+
+def convert(filename: str):
+    path = Path(filename)
+    subprocess.call(["mkdir", "-p", f"{path.as_posix()[:-4]}"])
+    subprocess.call(["convert", "-density", "80", path.as_posix(),
+                    f"{path.as_posix()[:-4]}/{path.name[:-4]}.png"])
 
 
 class MainWindow(QWidget):
@@ -34,11 +43,10 @@ class MainWindow(QWidget):
             "pdfs (*.pdf *.PDF)"
         )
         if filename:
-            path = Path(filename)
-            subprocess.call(["mkdir", "-p", f"{path.as_posix()[:-4]}"])
-            subprocess.call(["convert", "-density", "80", path.as_posix(),
-                            f"{path.as_posix()[:-4]}/{path.name[:-4]}.png"])
-            exit()
+            thread = threading.Thread(target=convert, args=(filename,))
+            thread.start()
+            thread.join()
+        exit()
 
 
 if __name__ == '__main__':
