@@ -5,7 +5,7 @@ description = "Add your description here"
 readme = "README.md"
 authors = [{ name = "Nick Tyler", email = "nicholas.s.tyler.4@gmail.com" }]
 requires-python = ">=3.13"
-dependencies = ["pyqt6>=6.9.1", "wand>=0.6.13"]
+dependencies = ["pyqt6>=6.9.1", "tqdm>=4.67.1", "wand>=0.6.13"]
 
 [project.scripts]
 convert-pdf-to-png = "convert_pdf_to_png:main"

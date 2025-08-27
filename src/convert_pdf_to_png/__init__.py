@@ -1,37 +1,28 @@
 import json
 import subprocess
 import sys
-import threading
+from concurrent.futures import ThreadPoolExecutor, as_completed
 from pathlib import Path
 
-from PyQt6.QtCore import QTimer
 from PyQt6.QtWidgets import (
     QApplication,
     QFileDialog,
     QGridLayout,
     QLabel,
     QLineEdit,
-    QProgressBar,
     QPushButton,
     QWidget,
 )
 from wand.image import Image
 
 
-def convert(filename: str):
-    file_name = Path(filename)
-    new_parent = Path(file_name.as_posix()[:-4])
-    new_parent.mkdir(exist_ok=True, parents=True)
-    subprocess.call(
-        [
-            "magick",
-            "convert",
-            "-density",
-            "192",
-            file_name.as_posix(),
-            f"{new_parent.as_posix()}/{file_name.name[:-4]}.png",
-        ]
-    )
+def process_pdf_page(in_filename, page_num, out_filename):
+    with Image(filename=f"{in_filename}[{page_num}]", resolution=500) as frame:
+        page = Image(frame)
+        page.save(
+            filename=out_filename,
+        )
+    return True
 
 
 class MainWindow(QWidget):
@@ -57,32 +48,9 @@ class MainWindow(QWidget):
         self.layout.addWidget(self.filename_edit, 0, 1)
         self.layout.addWidget(self.file_browse, 0, 2)
         self.file_browse.clicked.connect(self.open_file_dialog)
-
-        self.progressBar = QProgressBar(self)
-        self.progressBar.setRange(0, 100)
-        self.progressBar.setValue(0)  # Initial value
-
-        self.startButton = QPushButton("Start Progress")
-        self.startButton.clicked.connect(self.start_progress)
-
-        self.layout.addWidget(self.progressBar)
-        self.layout.addWidget(self.startButton)
         self.setLayout(self.layout)
 
-        self.timer = QTimer(self)
-
         self.show()
-
-    def start_progress(self):
-        self.progress_value = 0
-        self.progressBar.setValue(0)
-        self.timer.start(50)
-
-    def update_progress(self):
-        self.progress_value += 1
-        self.progressBar.setValue(self.progress_value)
-        if self.progress_value >= 100:
-            self.timer.stop()
 
     def open_file_dialog(self):
         filename, ok = QFileDialog.getOpenFileName(
@@ -92,7 +60,6 @@ class MainWindow(QWidget):
             "pdfs (*.pdf *.PDF)",
         )
         self.filename = filename
-        self.start_progress()
         self.start_convert()
 
     def start_convert(self):
@@ -101,21 +68,24 @@ class MainWindow(QWidget):
         new_parent.mkdir(exist_ok=True, parents=True)
 
         with Image(filename=self.filename) as full_pdf:
-            num_pages = len(full_pdf.sequence)
-            self.progressBar.setRange(0, num_pages)
-            self.progressBar.setValue(0)  # Initial value
-            for page_num in range(num_pages):
-                self.update_progress()
-                with full_pdf.sequence[page_num] as frame:
-                    page = Image(frame)
-                    print(
-                        f"{new_parent.as_posix()}/{file_name.name[:-4]}.{page_num:04d}.png"
-                    )
+            self.num_pages = len(full_pdf.sequence)
+        threads = []
+        with ThreadPoolExecutor(max_workers=12) as exe:
+            for page_num in range(self.num_pages):
+                out_filename = (
+                    f"{new_parent.as_posix()}/{file_name.name[:-4]}.{page_num:04d}.png"
+                )
+                threads.append(
+                    exe.submit(process_pdf_page, self.filename, page_num, out_filename)
+                )
+
+        [t.result() for t in as_completed(threads)]
+        exit(0)
 
 
 def main():
     app = QApplication(sys.argv)
-    window = MainWindow()
+    _window = MainWindow()
     sys.exit(app.exec())
 
 
